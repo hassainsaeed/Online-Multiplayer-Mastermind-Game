@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<!-- THIS IS THE MASTERMIND GAME MADE BY HASSAIN SAEED 100853383 -->
+<head>
+<meta charset="ISO-8859-1">
+<title>Mastermind Game</title>
+
+<script type=text/javascript>
+var colIndex = 1;		//Global variable, keeps track of how many Display Columns are displaying Letters         
+var numColumns = 3;     //Global variable of how many columns in the game (i.e How many guesses User is allowed, size of randomly generated code, size of User guesses, etc.). Made global variable so it can be scalable
+var numColors = 3;		//Global variable of how many colours we are playing with
+var sessionIDGame;
+var usernameGame;
+var servers = [ 
+				"http://localhost/LAB4/server.php?",
+				"http://localhost:8080/LAB4/server.jsp?"];
+var serverIndex=0;
+var isItMyTurn = 0; //1 for PlayerA; 0 is for PlayerB;
+var isPlayerA = 0;
+var isPlayerB = 0;
+
+
+//function that occurs when User hits Start Game Button. 
+//Make sure they have a Username, and then use server.php to set a Session ID and Code 
+function submitUsername() {
+	username = document.getElementById("username").value;
+
+
+	var sessionID = "";
+	if (!username){
+		window.alert("Enter a Username!")  //If username not set, Alert the USER
+	}else {
+		console.log("Username is " + username);
+		isItMyTurn = 1;
+		isPlayerA = 1;
+		var req  = new XMLHttpRequest();         //New XMLHttpRequest to get SessionID from server.php, and make it generate the Code
+		req.open("GET", servers[serverIndex] + "operation="+1+"&username="+username, true);
+			
+		req.onreadystatechange = function() {
+			if (req.readyState == 4 && req.status == 200) {
+				var r = req.responseText.trim();
+				console.log(r);
+				document.getElementById("front").style.display="none";			//Set login page invisible, make Game Board and Messages visible
+				document.getElementById("second").style.display="block";
+				document.getElementById("third").style.display="block";
+				sessionIDGame = r;																	//SessionID = response from server.php
+				var comp = document.getElementById("displaySessionID");
+				comp.innerHTML = sessionIDGame; 											//Set the SessionID display above the board to the SessionID
+			}
+		};			
+		
+		req.onerror = function(e){			
+			console.log("SWITCH TO JSP SERVER");
+			serverIndex++;
+			if(serverIndex==1){
+				alert("Switch to second server");
+				submitUsername(); // execute again the function with the second server
+			}else{
+				alert("Both servers are down");
+			}
+		};
+		req.send();
+		setInterval(function(){getUpdate()}, 5000);									//Periodically poll from server to check for Updates
+	}
+	
+}
+
+//function that occurs when User hits Join Game Button. 
+//Make sure they have a Username and SessionID, and then use server.php to verify Session ID and get the Code 
+function submitSessionID() {
+	username = document.getElementById("username").value;
+	var sessionID = document.getElementById("sessionID").value;
+	isPlayerB = 1;
+	if (!username){
+		window.alert("Enter a Username!")          //If user doesnt have Username, Alert them
+	}else if (!sessionID){
+		window.alert("Enter a Session ID!")			//If user doesnt have SessionID, Alert them
+	} else {
+		console.log("Username is " + username);
+		var req  = new XMLHttpRequest();          //New XMLHTTP Request to send Username and SessionID to server.php, make server.php verify the sessionID and get the appropriate Code
+		req.open("GET", servers[serverIndex] + "operation="+1+"&username="+username+"&sessionID="+sessionID, true);
+		
+		req.onreadystatechange = function() {
+			if (req.readyState == 4 && req.status == 200) {
+				var r = req.responseText;
+				console.log(r);
+				document.getElementById("front").style.display="none";				//Set login page invisible, make Game Board and Messages visible
+				document.getElementById("second").style.display="block";
+				document.getElementById("third").style.display="block";
+				sessionIDGame = r;																		//SessionID = response from server.php
+				var comp = document.getElementById("displaySessionID");
+				comp.innerHTML = sessionIDGame; 												//Set the SessionID display above the board to the SessionID
+			}
+		};
+		
+		req.onerror = function(e){			
+			serverIndex++;
+			if(serverIndex==1){
+				console.log("SWITCH TO JSP SERVER");
+				alert("Switch to second server");
+				submitSessionID(); // execute again the function with the second server
+			}else{
+				alert("Both servers are down");
+			}
+					
+		};
+		
+		req.send();
+		setInterval(function(){getUpdate()}, 5000 );										//Periodically poll from server to check for Updates
+	}
+}
+
+//This function periodically polls the server (via XMLHTTPRequest) and gets the Results of the current Session and displays it for all Users playing
+function getUpdate() {
+	var req  = new XMLHttpRequest();
+	req.open("GET", servers[serverIndex] + "operation="+3+"&sessionID="+sessionIDGame, true);		//Get XMLHTTPRequest from serverGetUpdates.php
+	req.onreadystatechange = function() {
+			if (req.readyState == 4 && (req.status == 200 || req.status == 0)) {
+				var r = req.responseText;
+				
+				var countBR = (r.match(/<br>/g) || []).length;
+				console.log("Number of BR is: " + countBR);
+				console.log("Are you PlayerA: " + isPlayerA);
+				console.log("Are you PlayerB: " + isPlayerB);
+				if (countBR % 2 == 0) {
+					if (isPlayerA) {
+						isItMyTurn = 1;
+					} else {
+						isItMyTurn = 0;
+					}
+				} else {
+					if (isPlayerB) {
+						isItMyTurn = 1;
+					} else {
+						isItMyTurn = 0;
+					}
+				}
+				
+				console.log(r);																								//Response from server is contents of results[SessionID].txt
+				document.getElementById("displayMessage").innerHTML = r;							//Set the Messages under the Game Board to be the output of results[SessionID].txt
+				if (r.indexOf("Game Over.") >-1) {																//Check results[SessionID].txt to see if "Game Over " message is present. If so, close the Board and end the game			
+					console.log("Game has been won");
+					document.getElementById("second").style.display="none";
+				}
+			}
+	};
+	
+	req.onerror = function(e){			
+			serverIndex++;
+			if(serverIndex==1){
+				console.log("SWITCH TO JSP SERVER");
+				alert("Switch to second server");
+				getUpdate(); // execute again the function with the second server
+			}else{
+				alert("Both servers are down");
+			}
+					
+		};
+	
+	req.send(null);
+}
+
+//This function is called every time a button is pressed. It displays the pressed button in the correct Display column.
+function guessColour(colourValue, columnIndex) {
+	var displaycellID = "displayColor" + columnIndex;
+	var comp = document.getElementById(displaycellID);
+	comp.innerHTML = colourValue;                      //If already pressed, overwrite the displayed color in the cell
+	console.log(displaycellID + " - " + colourValue); 
+	if (colIndex < numColumns+1) colIndex++;           //Keep track of how many cells are displaying. Can be a maximum of 3 (numberColumns) 
+}
+
+//This function is called when the 'ok' button is pressed. 
+//It checks how many colours the user has guessed is correct by sending the guesses to the Server (via XMLHTTPRequest), then gets the Results back from the server and outputs it
+function checkGuesses() {
+
+	if (isItMyTurn == 1) {
+		if (colIndex == numColumns+1) {                    //User should only be allowed to check their code if all 3 columns are displaying a color
+			var userGuesses = new Array(numColumns);
+			var numCorrectGuesses = 0;                      //This stores how many of the Users Guesses are correct
+			for (i = 1; i <= numColumns; i++) {
+				var displaycellID = "displayColor" + i;
+				var comp = document.getElementById(displaycellID);
+				var guessedColour = comp.innerHTML;
+				userGuesses[i] = guessedColour;
+			}
+						
+			var req  = new XMLHttpRequest();			//New XMLHTTPRequest tp serverCheckGuesses.php - this php file will recieve the users guesses and output how much they got right
+			req.open("GET", servers[serverIndex] + "operation="+2+"&username="+username+"&sessionID="+sessionIDGame+"&guess0="+userGuesses[1]+"&guess1="+userGuesses[2]+"&guess2="+userGuesses[3], false);
+			req.onreadystatechange = function() {
+				if (req.readyState == 4 && req.status == 200) {
+					var r = req.responseText;
+					console.log(r);																				//Response text is the output of the results[sessionID].txt file
+					document.getElementById("displayMessage").innerHTML =  r;		//Set the message display under the board to the output of the results[SessionID].txt
+					if (r.indexOf("Game Over.") >-1) {												//Check the output message to see if User has won. If so, hide the Game Board and end the game
+						console.log("Game has been won");
+						document.getElementById("second").style.display="none";
+					}
+				}
+			};
+		
+			req.onerror = function(e){			
+				serverIndex++;
+				if(serverIndex==1){
+					console.log("SWITCH TO JSP SERVER");
+					alert("Switch to second server");
+					checkGuesses(); // execute again the function with the second server
+				}else{
+					alert("Both servers are down");
+				}
+					
+			};		
+		
+			req.send();
+			isItMyTurn = 0;
+		}
+	} else {
+		alert("It is not your turn to play");
+	}
+}
+
+</script>
+
+</head>
+<body>
+<h2> Welcome to the game Mastermind</h2>
+<br>
+<div id="front">
+<h2>You can start a new game or join a game started by another user </h2>
+	<input type="text" id="username"/><button onclick="submitUsername()">Start Game</button> <br>
+	<input type="text" id="sessionID"/><button onclick="submitSessionID()">Join Game</button><br>
+</div>
+<div id="second" style="display:none">
+
+<table border="2" align="center" style='width:150px;border:3px solid black;border-collapse:collapse'>
+	<tr>
+		<td id="displaySessionID" style='text-align:center;height:20px'> sessionIDGame </td> 
+	</tr>
+</table>
+ 
+<br>
+<br>	
+
+<table border="2" align="center" style='width:150px;border:3px solid black;border-collapse:collapse'>
+	<tr> 
+		<td id="displayColor1" style='text-align:center;height:20px'>  </td>
+		<td id="displayColor2" style='text-align:center;height:20px'>  </td>
+		<td id="displayColor3" style='text-align:center;height:20px'>  </td>
+	</tr>
+	<tr> 
+		<td>  <button style='width:100%;' onClick=guessColour("B",1)>B</button>  </td>
+		<td> <button style='width:100%;' onClick=guessColour("B",2)>B</button> </td>
+		<td>  <button style='width:100%;' onClick=guessColour("B",3)>B</button></td>
+	</tr>
+	<tr> 
+		<td> <button style='width:100%;' onClick=guessColour("R",1)>R</button> </td>
+		<td> <button style='width:100%;' onClick=guessColour("R",2)>R</button> </td>
+		<td> <button style='width:100%;' onClick=guessColour("R",3)>R</button> </td>
+	</tr>
+	<tr> 
+		<td> <button style='width:100%;' onClick=guessColour("G",1)>G</button> </td>
+		<td>  <button style='width:100%;' onClick=guessColour("G",2)>G</button></td>
+		<td>  <button style='width:100%;' onClick=guessColour("G",3)>G</button></td>
+	</tr>
+	<tr>
+		<td colspan = 3 style='text-align:center'> <button onClick=checkGuesses() >ok</button> </td>
+	</tr>
+</table>
+</div>
+<div id="third" style="display:none">
+<p id="displayMessage"></p>
+</div>
+</body>
+</html>
+	
+	
